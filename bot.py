@@ -2,35 +2,29 @@ import re
 import os
 import pymongo
 import urllib
-
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
-
 bot = Client(
-    session_name=":memory:",
+    name=":memory:",
     api_id=int(os.environ["API_ID"]),
     api_hash=os.environ["API_HASH"],
     bot_token=os.environ["BOT_TOKEN"]
 )
 
-
 @bot.on_message(filters.command("start"))
 async def _start(_, msg: Message):
     START = """
 **Hii {}**, `I am MongoDB Url Checker Bot, Just Send me your MongoDB Url I will tell your Url having any issues to connect or not.`
-
 __Made with ❤ by [Krishna](https://t.me/Krishna_Singhal)__.
 """
     await msg.reply(START.format(msg.from_user.mention), disable_web_page_preview=True)
-
 
 @bot.on_message(filters.private & filters.text & ~filters.command(["start", "check"]))
 async def _private_filter(_, msg: Message):
     url = msg.text
     await check_url(msg, url)
     await msg.delete()  # For Security
-
 
 @bot.on_message(filters.command("check"))
 async def _check(_, msg: Message):
@@ -43,7 +37,6 @@ async def _check(_, msg: Message):
         await msg.delete()  # Will work also in group so Pass chat admin Exception.
     except:
         await msg.reply("`I can't delete this Url Myself, Any admin delete this for Security.")
-
 
 async def check_url(msg: Message, url: str):
     PATTERN = r"^mongodb((?:\+srv))?:\/\/(.*):(.*)@[a-z0-9]+\.(.*)\.mongodb\.net\/(.*)\?retryWrites\=true&w\=majority"
@@ -78,7 +71,6 @@ async def check_url(msg: Message, url: str):
             new_url = url.replace(match.group(5), dbname)
             return await msg.reply(f"`you forgot to remove '<' and '>' signs.`\n\n**Use this URL:** `{new_url}`")
         await msg.reply("`This URL is ERROR Free. you can use this to connect to MongoDb.`")
-
 
 if __name__ == "__main__":
     bot.run()
