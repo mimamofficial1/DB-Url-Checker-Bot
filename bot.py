@@ -16,7 +16,7 @@ bot = Client(
 async def _start(_, msg: Message):
     START = """
 **Hii {}**, `I am MongoDB Url Checker Bot, Just Send me your MongoDB Url I will tell your Url having any issues to connect or not.`
-__Made with ❤ by [Krishna](https://t.me/Krishna_Singhal)__.
+__Made with ❤ by [𝄟͢🦋⃟≛⃝ 𝐃𝐚𝐫𝐤 𝐨𝐟 𝐃𝐚𝐧𝐠𝐞𝐫 𝄟⃝❤](https://t.me/Dark_of_Danger)__.
 """
     await msg.reply(START.format(msg.from_user.mention), disable_web_page_preview=True)
 
@@ -34,43 +34,60 @@ async def _check(_, msg: Message):
         return await msg.reply("`URL not Found!`")
     await check_url(msg, url)
     try:
-        await msg.delete()  # Will work also in group so Pass chat admin Exception.
+        await msg.delete()
     except:
         await msg.reply("`I can't delete this Url Myself, Any admin delete this for Security.")
 
 async def check_url(msg: Message, url: str):
-    PATTERN = r"^mongodb((?:\+srv))?:\/\/(.*):(.*)@[a-z0-9]+\.(.*)\.mongodb\.net\/(.*)\?retryWrites\=true&w\=majority"
-    s_r = re.compile("[@_!#$%^&*()<>?/\|}{~:]")
+    # Supports both old and new MongoDB Atlas URL formats:
+    # Old: mongodb+srv://user:pass@cluster0.xxx.mongodb.net/dbname?retryWrites=true&w=majority
+    # New: mongodb+srv://user:pass@cluster0.xxx.mongodb.net/?appName=Cluster0
+    PATTERN = r"^mongodb(\+srv)?:\/\/([^:]+):([^@]+)@([^\/]+)\/([^\?]*)(\?.*)?"
+    s_r = re.compile(r"[@_!#$%^&*()<>?/\|}{~:]")
     match = re.match(PATTERN, url)
-    if not match:
+
+    if not match or not url.startswith("mongodb"):
         return await msg.reply(f"**Invalid MongoDB Url**: `{url}`")
+
     try:
-        pymongo.MongoClient(url)
+        client = pymongo.MongoClient(url, serverSelectionTimeoutMS=5000)
+        client.server_info()  # Force connection check
     except Exception as e:
-        if "Username and password must be escaped" in str(e):
-            if bool(match.group(1)):
-                raw_url = "mongodb+srv://{}:{}@cluster0.{}.mongodb.net/{}?retryWrites=true&w=majority"
-            else:
-                raw_url = "mongodb://{}:{}@cluster0.{}.mongodb.net/{}?retryWrites=true&w=majority"
-            username, password, key, dbname = match.group(2), match.group(3), match.group(4), match.group(5)
+        err = str(e)
+        if "Username and password must be escaped" in err:
+            username = match.group(2)
+            password = match.group(3)
+            host = match.group(4)
+            dbname = match.group(5) or "mydb"
+            query = match.group(6) or "?retryWrites=true&w=majority"
+
             if s_r.search(username):
                 username = urllib.parse.quote_plus(username)
             if s_r.search(password):
                 password = urllib.parse.quote_plus(password)
-            if '<' or '>' in dbname:
+            if '<' in dbname or '>' in dbname:
                 dbname = "Userge"
-            new_url = raw_url.format(username, password, key, dbname)
+
+            prefix = "mongodb+srv" if match.group(1) else "mongodb"
+            new_url = f"{prefix}://{username}:{password}@{host}/{dbname}{query}"
+
             await msg.reply(
                 "`Your URL having Invalid Username and Password.`\n\n"
                 "`I quoted your Username and Password and created new DB_URI, "
                 f"Use this to connect to MongoDB.`\n\n`{new_url}`"
             )
+        elif "Authentication failed" in err:
+            await msg.reply("`Authentication Failed! Wrong username or password in this URL.`")
+        elif "timed out" in err or "ServerSelectionTimeoutError" in err:
+            await msg.reply("`Connection Timed Out! IP not whitelisted in MongoDB Atlas (Allow 0.0.0.0/0).`")
+        else:
+            await msg.reply(f"`Connection Error:` `{err}`")
     else:
-        if ('<' or '>') in match.group(5):
-            dbname = "Userge"
-            new_url = url.replace(match.group(5), dbname)
-            return await msg.reply(f"`you forgot to remove '<' and '>' signs.`\n\n**Use this URL:** `{new_url}`")
-        await msg.reply("`This URL is ERROR Free. you can use this to connect to MongoDb.`")
+        dbname = match.group(5)
+        if dbname and ('<' in dbname or '>' in dbname):
+            new_url = url.replace(dbname, "Userge")
+            return await msg.reply(f"`You forgot to remove '<' and '>' signs.`\n\n**Use this URL:** `{new_url}`")
+        await msg.reply("`This URL is ERROR Free. You can use this to connect to MongoDB.`")
 
 if __name__ == "__main__":
     bot.run()
